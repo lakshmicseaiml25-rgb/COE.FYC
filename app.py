@@ -6,10 +6,12 @@ from fpdf import FPDF
 import tempfile
 import os
 
-st.set_page_config(page_title="Document Scanner", layout="centered")
+st.set_page_config(page_title="Color Document Scanner", layout="centered")
 
-st.title("📄 Document Scanner")
-st.write("Upload a document image, convert it to black & white like Adobe Scan, and download it as a PDF.")
+st.title("📄 Color Document Scanner")
+st.write(
+    "Upload a document image, apply a red-blue scan effect, convert it to PDF, and download it."
+)
 
 uploaded_file = st.file_uploader(
     "Upload a document image",
@@ -21,53 +23,74 @@ def process_document(image):
     # Convert PIL image to OpenCV format
     image_np = np.array(image)
 
-    # Convert RGB to BGR for OpenCV
-    image_cv = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
+    # Convert RGB to BGR
+    img = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
 
-    # Convert to grayscale
-    gray = cv2.cvtColor(image_cv, cv2.COLOR_BGR2GRAY)
+    # Resize for better processing
+    img = cv2.resize(img, None, fx=1.2, fy=1.2)
 
-    # Apply adaptive threshold for scan effect
-    scanned = cv2.adaptiveThreshold(
-        gray,
-        255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        11,
-        2
-    )
+    # Increase contrast
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
 
-    return scanned
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    cl = clahe.apply(l)
+
+    enhanced = cv2.merge((cl, a, b))
+    enhanced = cv2.cvtColor(enhanced, cv2.COLOR_LAB2BGR)
+
+    # Create red-blue effect
+    blue_channel = enhanced[:, :, 0]
+    red_channel = enhanced[:, :, 2]
+
+    # Enhance channels
+    blue_channel = cv2.equalizeHist(blue_channel)
+    red_channel = cv2.equalizeHist(red_channel)
+
+    # Create merged effect
+    effect = np.zeros_like(enhanced)
+    effect[:, :, 0] = blue_channel     # Blue
+    effect[:, :, 1] = 40               # Small green tint
+    effect[:, :, 2] = red_channel      # Red
+
+    # Sharpen image
+    kernel = np.array([
+        [0, -1, 0],
+        [-1, 5, -1],
+        [0, -1, 0]
+    ])
+
+    sharp = cv2.filter2D(effect, -1, kernel)
+
+    return sharp
 
 
 if uploaded_file is not None:
-    # Open uploaded image
     image = Image.open(uploaded_file).convert("RGB")
 
     st.subheader("Original Image")
     st.image(image, use_container_width=True)
 
-    if st.button("Convert to Scanned PDF"):
-        # Process image
-        scanned_image = process_document(image)
+    if st.button("Convert to Styled PDF"):
+        processed_image = process_document(image)
 
-        st.subheader("Scanned Black & White Image")
-        st.image(scanned_image, channels="GRAY", use_container_width=True)
+        # Convert BGR to RGB for display
+        display_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
 
-        # Save processed image temporarily
+        st.subheader("Processed Red-Blue Scan")
+        st.image(display_image, use_container_width=True)
+
+        # Save image temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_img:
             temp_image_path = temp_img.name
-            cv2.imwrite(temp_image_path, scanned_image)
+            cv2.imwrite(temp_image_path, processed_image)
 
         # Create PDF
         pdf = FPDF()
         pdf.add_page()
 
-        # PDF page dimensions
-        page_width = 190
-
-        # Add image to PDF
-        pdf.image(temp_image_path, x=10, y=10, w=page_width)
+        # Fit image on page
+        pdf.image(temp_image_path, x=10, y=10, w=190)
 
         # Save PDF temporarily
         pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
@@ -78,9 +101,9 @@ if uploaded_file is not None:
             st.download_button(
                 label="⬇ Download PDF",
                 data=pdf_file,
-                file_name="scanned_document.pdf",
+                file_name="styled_document.pdf",
                 mime="application/pdf"
             )
 
-        # Cleanup temp image
+        # Cleanup
         os.remove(temp_image_path)
