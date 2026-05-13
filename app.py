@@ -1,6 +1,3 @@
-# app.py
-
-```python
 import streamlit as st
 from PIL import Image
 import cv2
@@ -87,39 +84,3 @@ if uploaded_file is not None:
 
         # Cleanup temp image
         os.remove(temp_image_path)
-
-```
-
----
-
-# requirements.txt
-
-```txt
-streamlit
-opencv-python-headless
-numpy
-Pillow
-fpdf
-```
-
----
-
-# Run Locally
-
-```bash
-pip install -r requirements.txt
-streamlit run app.py
-```
-
----
-
-# Deploy on GitHub + Streamlit Cloud
-
-1. Push `app.py` and `requirements.txt` to a GitHub repository.
-2. Go to:
-
-   * [https://streamlit.io/cloud](https://streamlit.io/cloud)
-3. Connect your GitHub account.
-4. Select the repository.
-5. Deploy the app.
-
